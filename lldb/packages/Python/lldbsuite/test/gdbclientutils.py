@@ -56,6 +56,36 @@ def escape_binary(message):
     return out
 
 
+def unescape_binary(message: str) -> Optional[str]:
+    """
+    Unescape the binary message using the process described in the GDB server
+    protocol documentation.
+    """
+    out = ""
+    next_is_xor = False
+    repeat_char = None
+    for c in message:
+        d = ord(c)
+        if repeat_char is not None:
+            rep_count = d + 3 - 0x20
+            out += repeat_char * rep_count
+            rep_count = None
+        elif d == 0x2A:  # ASCII '*'
+            if len(out) == 0:
+                return None  # no char to repeat
+            repeat_char = out[-1]
+        elif next_is_xor:
+            next_is_xor = False
+            out += chr(d ^ 0x20)
+        elif d == 0x7D:  # ASCII '}'
+            next_is_xor = True
+        else:
+            out += c
+    if next_is_xor or repeat_char is not None:
+        return None  # incomplete escape
+    return out
+
+
 def hex_encode_bytes(message):
     """
     Encode the binary message by converting each byte into a two-character
@@ -224,7 +254,7 @@ class MockGDBServerResponder:
             self.packetLog.add_sent(part)
         return response
 
-    def _respond_impl(self, packet) -> Union[Response, List[Response]]:
+    def _respond_impl(self, packet: str) -> Union[Response, List[Response]]:
         if packet is MockGDBServer.PACKET_INTERRUPT:
             return self.interrupt()
         if packet == "c":
@@ -341,6 +371,8 @@ class MockGDBServerResponder:
         if packet.startswith("qRegisterInfo"):
             regnum = int(packet[len("qRegisterInfo") :], 16)
             return self.qRegisterInfo(regnum)
+        if packet.startswith("jThreadExtendedInfo:"):
+            return self.jThreadExtendedInfo(packet.split(":", 1)[1])
         if packet == "k":
             return self.k()
 
@@ -492,6 +524,9 @@ class MockGDBServerResponder:
         return "OK"
 
     def qRegisterInfo(self, num) -> str:
+        return ""
+
+    def jThreadExtendedInfo(self, value: str) -> str:
         return ""
 
     def k(self):
