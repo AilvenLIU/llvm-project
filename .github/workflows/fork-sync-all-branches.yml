@@ -31,12 +31,14 @@ jobs:
           UPSTREAM=$(gh api "repos/${REPO}" --jq '.parent.full_name // empty')
           test -n "$UPSTREAM" || { echo "::error::Fork parent unavailable"; exit 1; }
           gh auth setup-git
-          git clone --no-checkout "https://github.com/${REPO}.git" repo
+          git clone --filter=blob:none --no-checkout "https://github.com/${REPO}.git" repo
           cd repo
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
           git remote add upstream "https://github.com/${UPSTREAM}.git"
-          git fetch upstream '+refs/heads/*:refs/remotes/upstream/*'
+          git config remote.upstream.promisor true
+          git config remote.upstream.partialclonefilter blob:none
+          git fetch --filter=blob:none upstream '+refs/heads/*:refs/remotes/upstream/*'
           git show-ref --verify refs/remotes/upstream/main
 
           declare -A origin_tips
@@ -51,13 +53,16 @@ jobs:
           fi
 
           # Mirror upstream branches, reserving master and develop for fork policy.
+          refspecs=()
+          leases=()
           while read -r branch; do
             case "$branch" in develop|master) continue ;; esac
-            git push origin "refs/remotes/upstream/${branch}:refs/heads/${branch}" \
-              "--force-with-lease=refs/heads/${branch}:${origin_tips[$branch]-}"
+            refspecs+=("refs/remotes/upstream/${branch}:refs/heads/${branch}")
+            leases+=("--force-with-lease=refs/heads/${branch}:${origin_tips[$branch]-}")
           done < <(git for-each-ref --format='%(refname:strip=3)' refs/remotes/upstream/)
-          git push origin refs/remotes/upstream/main:refs/heads/master \
-            "--force-with-lease=refs/heads/master:${origin_tips[master]-}"
+          refspecs+=(refs/remotes/upstream/main:refs/heads/master)
+          leases+=("--force-with-lease=refs/heads/master:${origin_tips[master]-}")
+          git push --atomic origin "${leases[@]}" "${refspecs[@]}"
           git branch -f master refs/remotes/upstream/main
           if ! git rebase master; then
             git rebase --abort
