@@ -45,9 +45,9 @@ jobs:
           done < <(git ls-remote --heads origin)
           develop_tip="${origin_tips[develop]-}"
           if [[ -n "$develop_tip" ]]; then
-            git checkout -b develop "$develop_tip"
+            git checkout -B develop "$develop_tip"
           else
-            git checkout -b develop refs/remotes/upstream/main
+            git checkout -B develop refs/remotes/upstream/main
           fi
 
           # Mirror upstream branches, reserving master and develop for fork policy.
