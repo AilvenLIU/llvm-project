@@ -1,0 +1,68 @@
+name: fork-sync-all-branches
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+  push:
+    branches: [develop]
+    paths: [.github/workflows/fork-sync-all-branches.yml]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fork-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.event.repository.fork
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ secrets.FORK_SYNC_TOKEN || secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Sync upstream branches and rebase develop onto master
+        shell: bash
+        run: |
+          set -euo pipefail
+          UPSTREAM=$(gh api "repos/${REPO}" --jq '.parent.full_name // empty')
+          test -n "$UPSTREAM" || { echo "::error::Fork parent unavailable"; exit 1; }
+          gh auth setup-git
+          git clone --no-checkout "https://github.com/${REPO}.git" repo
+          cd repo
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git remote add upstream "https://github.com/${UPSTREAM}.git"
+          git fetch upstream '+refs/heads/*:refs/remotes/upstream/*'
+          git show-ref --verify refs/remotes/upstream/main
+
+          declare -A origin_tips
+          while read -r sha ref; do
+            origin_tips["${ref#refs/heads/}"]="$sha"
+          done < <(git ls-remote --heads origin)
+          develop_tip="${origin_tips[develop]-}"
+          if [[ -n "$develop_tip" ]]; then
+            git checkout -b develop "$develop_tip"
+          else
+            git checkout -b develop refs/remotes/upstream/main
+          fi
+
+          # Mirror upstream branches, reserving master and develop for fork policy.
+          while read -r branch; do
+            case "$branch" in develop|master) continue ;; esac
+            git push origin "refs/remotes/upstream/${branch}:refs/heads/${branch}" \
+              "--force-with-lease=refs/heads/${branch}:${origin_tips[$branch]-}"
+          done < <(git for-each-ref --format='%(refname:strip=3)' refs/remotes/upstream/)
+          git push origin refs/remotes/upstream/main:refs/heads/master \
+            "--force-with-lease=refs/heads/master:${origin_tips[master]-}"
+          git branch -f master refs/remotes/upstream/main
+          if ! git rebase master; then
+            git rebase --abort
+            echo "::error::develop rebase conflict; resolve manually. Remote develop was preserved."
+            exit 1
+          fi
+          git push origin develop:refs/heads/develop \
+            "--force-with-lease=refs/heads/develop:${develop_tip}"
