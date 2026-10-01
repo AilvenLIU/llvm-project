@@ -306,7 +306,16 @@ private:
 struct TestDialectFoldInterface : public DialectFoldInterface {
   using DialectFoldInterface::DialectFoldInterface;
 
-  /// The fallback fold of the fold tests.
+  /// The fallback fold of the fold tests. Without `dialect_results_fold`
+  /// attributes, it uses the legacy method.
+  OpFoldResults fold(Operation *op, ArrayRef<Attribute> operands) const final {
+    if (op->hasAttr("dialect_results_fold") ||
+        op->hasAttr("dialect_results_fold_in_place_count"))
+      return getConfiguredFoldResults(op, operands, "dialect_results_fold");
+    return DialectFoldInterface::fold(op, operands);
+  }
+
+  /// The legacy fallback fold of the fold tests.
   LogicalResult fold(Operation *op, ArrayRef<Attribute> operands,
                      SmallVectorImpl<OpFoldResult> &results) const final {
     return getConfiguredLegacyFoldResults(op, operands, "dialect_fold",

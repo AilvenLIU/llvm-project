@@ -287,6 +287,18 @@ public:
   }
 };
 
+/// A fold trait in the `OpFoldResults` form for the fold tests. It reads its
+/// result from the `trait_fold` attributes.
+template <typename ConcreteType>
+class TestResultsFoldTrait
+    : public mlir::OpTrait::TraitBase<ConcreteType, TestResultsFoldTrait> {
+public:
+  static mlir::OpFoldResults
+  foldTrait(mlir::Operation *op, llvm::ArrayRef<mlir::Attribute> operands) {
+    return getConfiguredFoldResults(op, operands, "trait_fold");
+  }
+};
+
 } // namespace test
 
 #define GET_OP_CLASSES
