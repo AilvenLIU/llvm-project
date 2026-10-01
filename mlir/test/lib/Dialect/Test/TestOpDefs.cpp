@@ -2424,3 +2424,8 @@ OpFoldResults TestFoldDispatchOp::fold(FoldAdaptor adaptor) {
   return getConfiguredFoldResults(getOperation(), adaptor.getOperands(),
                                   "fold");
 }
+
+static_assert(op_definition_impl::detect_has_fold_results_trait<
+              TestResultsFoldTrait<TestFoldDispatchTraitsOp>>::value);
+static_assert(!op_definition_impl::detect_has_single_result_fold_trait<
+              TestResultsFoldTrait<TestFoldDispatchTraitsOp>>::value);
