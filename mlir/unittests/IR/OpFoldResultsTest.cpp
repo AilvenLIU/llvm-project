@@ -15,9 +15,13 @@
 #include "mlir/IR/OpDefinition.h"
 #include "mlir/IR/OpFoldResult.h"
 #include "mlir/IR/Operation.h"
+#include "llvm/Support/Compiler.h"
 #include "gtest/gtest.h"
 
 #include <functional>
+
+// These tests cover the deprecated legacy fold APIs.
+LLVM_SUPPRESS_DEPRECATED_DECLARATIONS_PUSH
 
 using namespace mlir;
 
@@ -717,8 +721,6 @@ TEST_F(OpFoldResultsTest, FreeHelpersMatchMembers) {
   EXPECT_TRUE(failed(failedResult));
 }
 
-// This test covers the deprecated overload of OpBuilder::tryFold.
-LLVM_SUPPRESS_DEPRECATED_DECLARATIONS_PUSH
 TEST_F(OpFoldResultsTest, OpBuilderLegacyTryFold) {
   Block block;
   OpBuilder b(&context);
@@ -759,7 +761,6 @@ TEST_F(OpFoldResultsTest, OpBuilderLegacyTryFold) {
   EXPECT_EQ(results[0], constants[0]->getResult(0));
   EXPECT_EQ(results[1], producer);
 }
-LLVM_SUPPRESS_DEPRECATED_DECLARATIONS_POP
 
 #ifdef GTEST_HAS_DEATH_TEST
 #ifndef NDEBUG
@@ -801,3 +802,5 @@ TEST_F(OpFoldResultsDeathTest, LegacyNullResult) {
 }
 #endif // NDEBUG
 #endif // GTEST_HAS_DEATH_TEST
+
+LLVM_SUPPRESS_DEPRECATED_DECLARATIONS_POP

@@ -443,8 +443,11 @@ public:
   /// The legacy fold hook signature, kept for backwards compatibility. It has
   /// the strict legacy contract: failure, success with an empty vector (in
   /// place), or success with one entry per result.
-  using LegacyFoldHookFn = llvm::unique_function<LogicalResult(
-      Operation *, ArrayRef<Attribute>, SmallVectorImpl<OpFoldResult> &) const>;
+  using LegacyFoldHookFn LLVM_DEPRECATED(
+      "use OperationName::FoldHookFn, which returns OpFoldResults", "") =
+      llvm::unique_function<LogicalResult(Operation *, ArrayRef<Attribute>,
+                                          SmallVectorImpl<OpFoldResult> &)
+                                const>;
 
   /// Create a new op at runtime. The op is registered only after passing it to
   /// the dialect using registerDynamicOp.
@@ -467,6 +470,9 @@ public:
       OperationName::FoldHookFn &&foldHookFn,
       GetCanonicalizationPatternsFn &&getCanonicalizationPatternsFn,
       OperationName::PopulateDefaultAttrsFn &&populateDefaultAttrsFn);
+  LLVM_DEPRECATED("pass an OperationName::FoldHookFn, which returns "
+                  "OpFoldResults",
+                  "")
   static std::unique_ptr<DynamicOpDefinition>
   get(StringRef name, ExtensibleDialect *dialect,
       OperationName::VerifyInvariantsFn &&verifyFn,
@@ -509,6 +515,9 @@ public:
     foldHookFn = std::move(foldHook);
   }
   /// Same as above, but with a legacy fold hook.
+  LLVM_DEPRECATED("pass an OperationName::FoldHookFn, which returns "
+                  "OpFoldResults",
+                  "")
   void setFoldHookFn(LegacyFoldHookFn &&foldHook);
   /// Remove the fold hook, so that the op has no fold of its own.
   void setFoldHookFn(std::nullptr_t);
