@@ -2324,3 +2324,56 @@ void test::ManyRegionsOp::build(
     state.addRegion(std::move(regionPtr));
   ManyRegionsOp::build(builder, state, {}, regions.size());
 }
+
+//===----------------------------------------------------------------------===//
+// Configurable folds
+//===----------------------------------------------------------------------===//
+
+/// Return the replacement that `element` of a fold configuration describes.
+static OpFoldResult getConfiguredReplacement(Operation *op,
+                                             ArrayRef<Attribute> operands,
+                                             Attribute element) {
+  if (isa<UnitAttr>(element))
+    return {};
+  if (auto str = dyn_cast<StringAttr>(element)) {
+    unsigned index;
+    StringRef spec = str.getValue();
+    if (spec.consume_front("result:") && !spec.getAsInteger(10, index))
+      return op->getResult(index);
+    spec = str.getValue();
+    if (spec.consume_front("operand:") && !spec.getAsInteger(10, index))
+      return op->getOperand(index);
+    spec = str.getValue();
+    if (spec.consume_front("operand_attr:") && !spec.getAsInteger(10, index))
+      return operands[index];
+  }
+  return element;
+}
+
+/// Consume one step of `<name>_in_place_count` on `op`. Return true if the
+/// fold changes `op` in place.
+static bool consumeInPlaceStep(Operation *op, StringRef name) {
+  std::string countName = (name + "_in_place_count").str();
+  auto count = op->getAttrOfType<IntegerAttr>(countName);
+  if (!count || count.getInt() <= 0)
+    return false;
+  if (count.getInt() == 1)
+    op->removeAttr(countName);
+  else
+    op->setAttr(countName,
+                IntegerAttr::get(count.getType(), count.getInt() - 1));
+  return true;
+}
+
+LogicalResult test::getConfiguredLegacyFoldResults(
+    Operation *op, ArrayRef<Attribute> operands, StringRef name,
+    SmallVectorImpl<OpFoldResult> &results) {
+  if (consumeInPlaceStep(op, name))
+    return success();
+  auto config = op->getAttrOfType<ArrayAttr>(name);
+  if (!config)
+    return failure();
+  for (Attribute element : config)
+    results.push_back(getConfiguredReplacement(op, operands, element));
+  return success();
+}

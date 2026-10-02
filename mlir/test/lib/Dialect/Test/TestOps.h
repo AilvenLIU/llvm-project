@@ -246,6 +246,23 @@ llvm::LogicalResult readFromMlirBytecode(mlir::DialectBytecodeReader &reader,
 void writeToMlirBytecode(mlir::DialectBytecodeWriter &writer,
                          llvm::ArrayRef<int64_t> prop);
 
+//===----------------------------------------------------------------------===//
+// Configurable folds
+//===----------------------------------------------------------------------===//
+
+/// Fill `results` with the legacy fold result that the attributes of `op`
+/// with the prefix `name` describe, for the fold tests:
+///  - `<name>_in_place_count = N`: the fold decrements N, so it changes `op`
+///    in place, and reports an in-place change. At 0, it drops the attribute.
+///  - Otherwise, `<name> = [...]` holds one replacement per result. A unit
+///    attribute keeps the result, "result:I" and "operand:I" name result or
+///    operand I of `op`, "operand_attr:I" is the constant value of operand I,
+///    and any other attribute replaces the result with that attribute.
+///  - Without these attributes, the fold fails.
+llvm::LogicalResult getConfiguredLegacyFoldResults(
+    mlir::Operation *op, llvm::ArrayRef<mlir::Attribute> operands,
+    llvm::StringRef name, llvm::SmallVectorImpl<mlir::OpFoldResult> &results);
+
 } // namespace test
 
 #define GET_OP_CLASSES
