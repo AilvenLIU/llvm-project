@@ -155,6 +155,10 @@ namespace detail {
 /// success with a full vector has one replacement per result.
 OpFoldResults convertLegacyFoldResults(LogicalResult status,
                                        ArrayRef<OpFoldResult> results);
+
+/// Convert the result of a single-result fold of `op`: null is a failure, the
+/// op's own result means "in place", and anything else replaces the result.
+OpFoldResults convertSingleResultFold(Operation *op, OpFoldResult result);
 } // namespace detail
 } // namespace mlir
 

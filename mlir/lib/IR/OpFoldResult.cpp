@@ -142,3 +142,10 @@ OpFoldResults detail::convertLegacyFoldResults(LogicalResult status,
          "legacy fold returned a null result");
   return results;
 }
+
+OpFoldResults detail::convertSingleResultFold(Operation *op,
+                                              OpFoldResult result) {
+  if (dyn_cast_if_present<Value>(result) == op->getResult(0))
+    return success();
+  return result;
+}
