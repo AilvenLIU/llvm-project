@@ -263,6 +263,30 @@ llvm::LogicalResult getConfiguredLegacyFoldResults(
     mlir::Operation *op, llvm::ArrayRef<mlir::Attribute> operands,
     llvm::StringRef name, llvm::SmallVectorImpl<mlir::OpFoldResult> &results);
 
+/// Return the fold result in the `OpFoldResults` form that the attributes of
+/// `op` with the prefix `name` describe. The attributes are the ones of
+/// `getConfiguredLegacyFoldResults`. In addition, the unit attribute
+/// `<name>_with_in_place`, which the fold drops, marks the replacements as an
+/// in-place change.
+mlir::OpFoldResults
+getConfiguredFoldResults(mlir::Operation *op,
+                         llvm::ArrayRef<mlir::Attribute> operands,
+                         llvm::StringRef name);
+
+/// A legacy fold trait for the fold tests. It reads its result from the
+/// `legacy_trait_fold` attributes.
+template <typename ConcreteType>
+class TestLegacyFoldTrait
+    : public mlir::OpTrait::TraitBase<ConcreteType, TestLegacyFoldTrait> {
+public:
+  static llvm::LogicalResult
+  foldTrait(mlir::Operation *op, llvm::ArrayRef<mlir::Attribute> operands,
+            llvm::SmallVectorImpl<mlir::OpFoldResult> &results) {
+    return getConfiguredLegacyFoldResults(op, operands, "legacy_trait_fold",
+                                          results);
+  }
+};
+
 } // namespace test
 
 #define GET_OP_CLASSES

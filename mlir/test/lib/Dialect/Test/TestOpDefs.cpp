@@ -2377,3 +2377,27 @@ LogicalResult test::getConfiguredLegacyFoldResults(
     results.push_back(getConfiguredReplacement(op, operands, element));
   return success();
 }
+
+OpFoldResults test::getConfiguredFoldResults(Operation *op,
+                                             ArrayRef<Attribute> operands,
+                                             StringRef name) {
+  if (consumeInPlaceStep(op, name))
+    return success();
+  auto config = op->getAttrOfType<ArrayAttr>(name);
+  if (!config)
+    return failure();
+  OpFoldResults results = llvm::map_to_vector(config, [&](Attribute element) {
+    return getConfiguredReplacement(op, operands, element);
+  });
+  std::string withInPlaceName = (name + "_with_in_place").str();
+  if (op->hasAttr(withInPlaceName)) {
+    op->removeAttr(withInPlaceName);
+    results.setModifiedInPlace();
+  }
+  return results;
+}
+
+OpFoldResults TestFoldDispatchOp::fold(FoldAdaptor adaptor) {
+  return getConfiguredFoldResults(getOperation(), adaptor.getOperands(),
+                                  "fold");
+}

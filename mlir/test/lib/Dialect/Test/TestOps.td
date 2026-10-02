@@ -1809,6 +1809,22 @@ def TestFoldDispatchFallbackOp : TEST_Op<"fold_dispatch_fallback"> {
   let results = (outs Variadic<AnyType>);
 }
 
+def TestLegacyFoldTrait : NativeOpTrait<"TestLegacyFoldTrait"> {
+  let cppNamespace = "::test";
+}
+
+// Op for the fold tests in IR/fold-dispatch.mlir. Its fold, in the
+// `OpFoldResults` form, reads its result from the `fold` attributes; see
+// `getConfiguredFoldResults`. Its legacy fold trait reads its result from the
+// `legacy_trait_fold` attributes.
+def TestFoldDispatchOp : TEST_Op<"fold_dispatch", [TestLegacyFoldTrait]> {
+  let arguments = (ins Variadic<AnyType>);
+  let results = (outs Variadic<AnyType>);
+  let extraClassDeclaration = [{
+    ::mlir::OpFoldResults fold(FoldAdaptor adaptor);
+  }];
+}
+
 //===----------------------------------------------------------------------===//
 // Test Patterns (Symbol Binding)
 //===----------------------------------------------------------------------===//
