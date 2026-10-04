@@ -8,6 +8,7 @@
 //    `<operand N>` are result or operand N, and `<operand_attr N>` is the
 //    constant value of operand N. Any other attribute replaces the result.
 //  - `in_place` makes the fold also change the op in place, once.
+//  - `in_place_steps = N` makes the next N folds only change the op in place.
 // Without the attribute, the fold fails.
 
 // `test.fold_dispatch_fallback` has no fold and no fold trait, so only the

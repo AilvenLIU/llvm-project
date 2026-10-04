@@ -2361,9 +2361,19 @@ consumeFoldConfig(Operation *op, StringRef name, bool combineInPlace) {
     return std::nullopt;
   NamedAttrList attrs(config);
   ConfiguredFold fold;
-  fold.replace = dyn_cast_if_present<ArrayAttr>(attrs.get("replace"));
-  if ((!fold.replace || combineInPlace) && attrs.erase("in_place"))
+  auto steps = dyn_cast_if_present<IntegerAttr>(attrs.get("in_place_steps"));
+  if (steps && steps.getInt() > 0) {
     fold.inPlace = true;
+    if (steps.getInt() == 1)
+      attrs.erase("in_place_steps");
+    else
+      attrs.set("in_place_steps",
+                IntegerAttr::get(steps.getType(), steps.getInt() - 1));
+  } else {
+    fold.replace = dyn_cast_if_present<ArrayAttr>(attrs.get("replace"));
+    if ((!fold.replace || combineInPlace) && attrs.erase("in_place"))
+      fold.inPlace = true;
+  }
   if (attrs.empty())
     op->removeAttr(name);
   else
