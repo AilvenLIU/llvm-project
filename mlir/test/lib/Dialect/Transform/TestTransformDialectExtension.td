@@ -589,13 +589,22 @@ def TestFoldOp
        [DeclareOpInterfaceMethods<TransformOpInterface>,
         DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
   let description = [{
-    Folds each target op with `Operation::fold` and emits the fold result as a
-    remark on the target op. The remark says "failure", "in place", or lists
-    one entry per result, followed by "in place" if the fold also changed the
-    op in place.
+    Folds each target op and emits the fold result as a remark on the target
+    op. The remark says "failure", "in place", or lists one entry per result,
+    followed by "in place" if the fold also changed the op in place. `api`
+    selects the fold function: "fold" (`Operation::fold`), "try_fold"
+    (`OpBuilder::tryFold`), or "materialize" (`OpBuilder::tryFold`, then
+    `OpBuilder::materializeFoldResults` before the target op, with `live_only`
+    as the `liveOnly` argument). "materialize" emits a second remark with the
+    materialized values.
   }];
-  let arguments = (ins TransformHandleTypeInterface:$target);
-  let assemblyFormat = "$target attr-dict `:` type($target)";
+  let arguments = (ins TransformHandleTypeInterface:$target,
+                   DefaultValuedStrAttr<StrAttr, "fold">:$api,
+                   UnitAttr:$live_only);
+  let assemblyFormat = [{
+    $target (`api` `=` $api^)? (`live_only` $live_only^)? attr-dict `:`
+    type($target)
+  }];
   let cppNamespace = "::mlir::test";
 }
 

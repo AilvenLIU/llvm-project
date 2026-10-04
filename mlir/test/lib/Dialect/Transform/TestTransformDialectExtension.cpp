@@ -995,8 +995,32 @@ DiagnosedSilenceableFailure
 mlir::test::TestFoldOp::apply(transform::TransformRewriter &rewriter,
                               transform::TransformResults &results,
                               transform::TransformState &state) {
-  for (Operation *op : state.getPayloadOps(getTarget()))
-    emitFoldRemark(op, op->fold());
+  StringRef api = getApi();
+  if (api != "fold" && api != "try_fold" && api != "materialize")
+    return emitDefiniteFailure() << "unknown api: " << api;
+  for (Operation *op : state.getPayloadOps(getTarget())) {
+    if (api == "fold") {
+      emitFoldRemark(op, op->fold());
+      continue;
+    }
+    OpBuilder builder(op);
+    OpFoldResults foldResults = builder.tryFold(op);
+    emitFoldRemark(op, foldResults);
+    if (api == "try_fold")
+      continue;
+    FailureOr<SmallVector<Value>> values =
+        builder.materializeFoldResults(op, foldResults, getLiveOnly());
+    InFlightDiagnostic remark = op->emitRemark() << "materialized: ";
+    if (failed(values)) {
+      remark << "failure";
+      continue;
+    }
+    remark << "[";
+    llvm::interleaveComma(*values, remark, [&](Value value) {
+      remark << (value ? describeFoldReplacement(op, value) : "none");
+    });
+    remark << "]";
+  }
   return DiagnosedSilenceableFailure::success();
 }
 
