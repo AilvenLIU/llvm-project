@@ -137,48 +137,47 @@ STATISTIC(NumDbgValueMoved, "Number of debug value instructions moved");
 STATISTIC(NumSelectsExpanded, "Number of selects turned into branches");
 STATISTIC(NumStoreExtractExposed, "Number of store(extractelement) exposed");
 
-static cl::opt<bool> DisableBranchOpts(
-    "disable-cgp-branch-opts", cl::Hidden, cl::init(false),
-    cl::desc("Disable branch optimizations in CodeGenPrepare"));
+static cl::opt<bool>
+    EnableBranchOpts("cgp-branch-opts", cl::Hidden, cl::init(true),
+                     cl::desc("Enable branch optimizations in CodeGenPrepare"));
 
 static cl::opt<bool>
-    DisableGCOpts("disable-cgp-gc-opts", cl::Hidden, cl::init(false),
-                  cl::desc("Disable GC optimizations in CodeGenPrepare"));
+    EnableGCOpts("cgp-gc-opts", cl::Hidden, cl::init(true),
+                 cl::desc("Enable GC optimizations in CodeGenPrepare"));
 
 static cl::opt<bool>
-    DisableSelectToBranch("disable-cgp-select2branch", cl::Hidden,
-                          cl::init(false),
-                          cl::desc("Disable select to branch conversion."));
+    EnableSelectToBranch("cgp-select2branch", cl::Hidden, cl::init(true),
+                         cl::desc("Enable select to branch conversion."));
 
 static cl::opt<bool>
-    AddrSinkUsingGEPs("addr-sink-using-gep", cl::Hidden, cl::init(true),
+    AddrSinkUsingGEPs("cgp-addr-sink-using-gep", cl::Hidden, cl::init(true),
                       cl::desc("Address sinking in CGP using GEPs."));
 
 static cl::opt<bool>
-    EnableAndCmpSinking("enable-andcmp-sinking", cl::Hidden, cl::init(true),
+    EnableAndCmpSinking("cgp-andcmp-sinking", cl::Hidden, cl::init(true),
                         cl::desc("Enable sinking and/cmp into branches."));
 
-static cl::opt<bool> DisableStoreExtract(
-    "disable-cgp-store-extract", cl::Hidden, cl::init(false),
-    cl::desc("Disable store(extract) optimizations in CodeGenPrepare"));
+static cl::opt<bool> EnableStoreExtract(
+    "cgp-store-extract", cl::Hidden, cl::init(true),
+    cl::desc("Enable store(extract) optimizations in CodeGenPrepare"));
 
 static cl::opt<bool> StressStoreExtract(
-    "stress-cgp-store-extract", cl::Hidden, cl::init(false),
+    "cgp-stress-store-extract", cl::Hidden, cl::init(false),
     cl::desc("Stress test store(extract) optimizations in CodeGenPrepare"));
 
-static cl::opt<bool> DisableExtLdPromotion(
-    "disable-cgp-ext-ld-promotion", cl::Hidden, cl::init(false),
-    cl::desc("Disable ext(promotable(ld)) -> promoted(ext(ld)) optimization in "
+static cl::opt<bool> EnableExtLdPromotion(
+    "cgp-ext-ld-promotion", cl::Hidden, cl::init(true),
+    cl::desc("Enable ext(promotable(ld)) -> promoted(ext(ld)) optimization in "
              "CodeGenPrepare"));
 
 static cl::opt<bool> StressExtLdPromotion(
-    "stress-cgp-ext-ld-promotion", cl::Hidden, cl::init(false),
+    "cgp-stress-ext-ld-promotion", cl::Hidden, cl::init(false),
     cl::desc("Stress test ext(promotable(ld)) -> promoted(ext(ld)) "
              "optimization in CodeGenPrepare"));
 
-static cl::opt<bool> DisablePreheaderProtect(
-    "disable-preheader-prot", cl::Hidden, cl::init(false),
-    cl::desc("Disable protection against removing loop preheaders"));
+static cl::opt<bool>
+    EnablePreheaderProtect("cgp-preheader-prot", cl::Hidden, cl::init(true),
+                           cl::desc("Protect loop preheaders from removal"));
 
 static cl::opt<bool> ProfileGuidedSectionPrefix(
     "profile-guided-section-prefix", cl::Hidden, cl::init(true),
@@ -209,7 +208,7 @@ static cl::opt<uint64_t> FreqRatioToSkipMerge(
              "(frequency of destination block) is greater than this ratio"));
 
 static cl::opt<bool> ForceSplitStore(
-    "force-split-store", cl::Hidden, cl::init(false),
+    "cgp-force-split-store", cl::Hidden, cl::init(false),
     cl::desc("Force store splitting no matter what the target query says."));
 
 static cl::opt<bool> EnableTypePromotionMerge(
@@ -218,33 +217,33 @@ static cl::opt<bool> EnableTypePromotionMerge(
              " the other."),
     cl::init(true));
 
-static cl::opt<bool> DisableComplexAddrModes(
-    "disable-complex-addr-modes", cl::Hidden, cl::init(false),
-    cl::desc("Disables combining addressing modes with different parts "
+static cl::opt<bool> EnableComplexAddrModes(
+    "cgp-complex-addr-modes", cl::Hidden, cl::init(true),
+    cl::desc("Enable combining addressing modes with different parts "
              "in optimizeMemoryInst."));
 
 static cl::opt<bool>
-    AddrSinkNewPhis("addr-sink-new-phis", cl::Hidden, cl::init(false),
+    AddrSinkNewPhis("cgp-addr-sink-new-phis", cl::Hidden, cl::init(false),
                     cl::desc("Allow creation of Phis in Address sinking."));
 
 static cl::opt<bool> AddrSinkNewSelects(
-    "addr-sink-new-select", cl::Hidden, cl::init(true),
+    "cgp-addr-sink-new-select", cl::Hidden, cl::init(true),
     cl::desc("Allow creation of selects in Address sinking."));
 
 static cl::opt<bool> AddrSinkCombineBaseReg(
-    "addr-sink-combine-base-reg", cl::Hidden, cl::init(true),
+    "cgp-addr-sink-combine-base-reg", cl::Hidden, cl::init(true),
     cl::desc("Allow combining of BaseReg field in Address sinking."));
 
 static cl::opt<bool> AddrSinkCombineBaseGV(
-    "addr-sink-combine-base-gv", cl::Hidden, cl::init(true),
+    "cgp-addr-sink-combine-base-gv", cl::Hidden, cl::init(true),
     cl::desc("Allow combining of BaseGV field in Address sinking."));
 
 static cl::opt<bool> AddrSinkCombineBaseOffs(
-    "addr-sink-combine-base-offs", cl::Hidden, cl::init(true),
+    "cgp-addr-sink-combine-base-offs", cl::Hidden, cl::init(true),
     cl::desc("Allow combining of BaseOffs field in Address sinking."));
 
 static cl::opt<bool> AddrSinkCombineScaledReg(
-    "addr-sink-combine-scaled-reg", cl::Hidden, cl::init(true),
+    "cgp-addr-sink-combine-scaled-reg", cl::Hidden, cl::init(true),
     cl::desc("Allow combining of ScaledReg field in Address sinking."));
 
 static cl::opt<bool>
@@ -266,7 +265,7 @@ static cl::opt<bool>
                      cl::desc("Enable converting phi types in CodeGenPrepare"));
 
 static cl::opt<unsigned>
-    HugeFuncThresholdInCGPP("cgpp-huge-func", cl::init(10000), cl::Hidden,
+    HugeFuncThresholdInCGPP("cgp-huge-func", cl::init(10000), cl::Hidden,
                             cl::desc("Least BB number of huge function."));
 
 static cl::opt<unsigned>
@@ -275,8 +274,8 @@ static cl::opt<unsigned>
                           cl::desc("Max number of address users to look at"));
 
 static cl::opt<bool>
-    DisableDeletePHIs("disable-cgp-delete-phis", cl::Hidden, cl::init(false),
-                      cl::desc("Disable elimination of dead PHI nodes."));
+    EnableDeletePHIs("cgp-delete-phis", cl::Hidden, cl::init(true),
+                     cl::desc("Enable elimination of dead PHI nodes."));
 
 namespace {
 
@@ -642,7 +641,7 @@ bool CodeGenPrepare::_run(Function &F) {
   if (ResetLI)
     resetLoopInfo();
 
-  if (!DisableBranchOpts)
+  if (EnableBranchOpts)
     EverMadeChange |= splitBranchCondition(F);
 
   // Split some critical edges where one of the sources is an indirect branch,
@@ -744,7 +743,7 @@ bool CodeGenPrepare::_run(Function &F) {
   // LoopInfo is not needed anymore and ConstantFoldTerminator can break it.
   LI = nullptr;
 
-  if (!DisableBranchOpts) {
+  if (EnableBranchOpts) {
     MadeChange = false;
     // Use a set vector to get deterministic iteration order. The order the
     // blocks are removed may affect whether or not PHI nodes in successors
@@ -785,7 +784,7 @@ bool CodeGenPrepare::_run(Function &F) {
     EverMadeChange |= MadeChange;
   }
 
-  if (!DisableGCOpts) {
+  if (EnableGCOpts) {
     SmallVector<GCStatepointInst *, 2> Statepoints;
     for (BasicBlock &BB : F)
       for (Instruction &I : BB)
@@ -952,7 +951,7 @@ bool CodeGenPrepare::eliminateMostlyEmptyBlocks(Function &F, bool &ResetLI) {
   // Note that this intentionally skips the entry block.
   for (auto &Block : llvm::drop_begin(F)) {
     // Delete phi nodes that could block deleting other empty blocks.
-    if (!DisableDeletePHIs)
+    if (EnableDeletePHIs)
       MadeChange |= DeleteDeadPHIs(&Block, TLInfo, nullptr, &KnownNonDeadPHIs);
   }
 
@@ -978,7 +977,7 @@ bool CodeGenPrepare::isMergingEmptyBlockProfitable(BasicBlock *BB,
   // Loop preheaders can be good locations to spill registers. If the
   // preheader is deleted and we create a critical edge, registers may be
   // spilled in the loop body instead.
-  if (!DisablePreheaderProtect && isPreheader &&
+  if (EnablePreheaderProtect && isPreheader &&
       !(BB->getSinglePredecessor() &&
         BB->getSinglePredecessor()->getSingleSuccessor()))
     return false;
@@ -4552,7 +4551,7 @@ private:
   }
 
   bool addrModeCombiningAllowed() {
-    if (DisableComplexAddrModes)
+    if (!EnableComplexAddrModes)
       return false;
     switch (DifferentField) {
     default:
@@ -6720,7 +6719,7 @@ bool CodeGenPrepare::tryToPromoteExts(
     // this check inside the for loop is to catch the case where an extension
     // is directly fed by a load because in such case the extension can be moved
     // up without any promotion on its operands.
-    if (!TLI->enableExtLdPromotion() || DisableExtLdPromotion)
+    if (!TLI->enableExtLdPromotion() || !EnableExtLdPromotion)
       return false;
 
     // Get the action to perform the promotion.
@@ -7740,7 +7739,7 @@ bool CodeGenPrepare::optimizeFunnelShift(IntrinsicInst *Fsh) {
 /// If we have a SelectInst that will likely profit from branch prediction,
 /// turn it into a branch.
 bool CodeGenPrepare::optimizeSelectInst(SelectInst *SI) {
-  if (DisableSelectToBranch)
+  if (!EnableSelectToBranch)
     return false;
 
   // If the SelectOptimize pass is enabled, selects have already been optimized.
@@ -8494,7 +8493,7 @@ void VectorPromoteHelper::promoteImpl(Instruction *ToBePromoted) {
 /// has this feature and this is profitable.
 bool CodeGenPrepare::optimizeExtractElementInst(Instruction *Inst) {
   unsigned CombineCost = std::numeric_limits<unsigned>::max();
-  if (DisableStoreExtract ||
+  if (!EnableStoreExtract ||
       (!StressStoreExtract &&
        !TLI->canCombineStoreAndExtract(Inst->getOperand(0)->getType(),
                                        Inst->getOperand(1), CombineCost)))
