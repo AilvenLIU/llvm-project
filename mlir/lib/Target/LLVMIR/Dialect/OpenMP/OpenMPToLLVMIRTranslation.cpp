@@ -416,7 +416,8 @@ static LogicalResult checkImplementationStatus(Operation &op) {
       result = todo("ompx_bare");
   };
   auto checkDepend = [&todo](auto op, LogicalResult &result) {
-    if (!op.getDependVars().empty() || op.getDependKinds())
+    if (!op.getDependVars().empty() || op.getDependKinds() ||
+        !op.getDependIterated().empty() || op.getDependIteratedKinds())
       result = todo("depend");
   };
   auto checkHint = [](auto op, LogicalResult &) {
@@ -2860,18 +2861,6 @@ private:
   unsigned dims;
   llvm::Value *totalTrips;
 
-  llvm::Value *lookUpAsI64(mlir::Value val, const LLVM::ModuleTranslation &mt,
-                           llvm::IRBuilderBase &builder) {
-    llvm::Value *v = mt.lookupValue(val);
-    if (!v)
-      return nullptr;
-    if (v->getType()->isIntegerTy(64))
-      return v;
-    if (v->getType()->isIntegerTy())
-      return builder.CreateSExtOrTrunc(v, builder.getInt64Ty());
-    return nullptr;
-  }
-
 public:
   IteratorInfo(mlir::omp::IteratorOp itersOp,
                mlir::LLVM::ModuleTranslation &moduleTranslation,
@@ -2883,12 +2872,12 @@ public:
     trips.resize(dims);
 
     for (unsigned d = 0; d < dims; ++d) {
-      llvm::Value *lb = lookUpAsI64(itersOp.getLoopLowerBounds()[d],
-                                    moduleTranslation, builder);
-      llvm::Value *ub = lookUpAsI64(itersOp.getLoopUpperBounds()[d],
-                                    moduleTranslation, builder);
+      llvm::Value *lb =
+          moduleTranslation.lookupValue(itersOp.getLoopLowerBounds()[d]);
+      llvm::Value *ub =
+          moduleTranslation.lookupValue(itersOp.getLoopUpperBounds()[d]);
       llvm::Value *st =
-          lookUpAsI64(itersOp.getLoopSteps()[d], moduleTranslation, builder);
+          moduleTranslation.lookupValue(itersOp.getLoopSteps()[d]);
       assert(lb && ub && st &&
              "Expect lowerBounds, upperBounds, and steps in IteratorOp");
       assert((!llvm::isa<llvm::ConstantInt>(st) ||
@@ -2900,9 +2889,10 @@ public:
       steps[d] = st;
 
       // Use a direction-aware count so an empty range contributes no entries.
-      // Widen before subtracting bounds: valid i64 endpoints can have a span
-      // that does not fit in signed i64.
-      llvm::Type *countTy = builder.getIntNTy(65);
+      // Widen before subtracting bounds: the span may not fit in the signed
+      // operand type. Preserve that type until the count has been computed.
+      llvm::Type *countTy =
+          builder.getIntNTy(lb->getType()->getIntegerBitWidth() + 1);
       llvm::Value *start = builder.CreateSExt(lb, countTy);
       llvm::Value *stop = builder.CreateSExt(ub, countTy);
       llvm::Value *step = builder.CreateSExt(st, countTy);
@@ -2910,7 +2900,7 @@ public:
           moduleTranslation.getOpenMPBuilder()->calculateCanonicalLoopTripCount(
               builder, start, stop, step, /*IsSigned=*/true,
               /*InclusiveStop=*/true);
-      trips[d] = builder.CreateTrunc(count, builder.getInt64Ty());
+      trips[d] = builder.CreateZExtOrTrunc(count, builder.getInt64Ty());
     }
 
     totalTrips = llvm::ConstantInt::get(builder.getInt64Ty(), 1);
@@ -3052,6 +3042,8 @@ static mlir::LogicalResult convertIteratorRegion(
     tmp = builder.CreateUDiv(tmp, trip);
 
     // physIV_d = lb_d + idx_d * step_d
+    idx =
+        builder.CreateZExtOrTrunc(idx, iterInfo.getLowerBounds()[d]->getType());
     llvm::Value *physIV = builder.CreateAdd(
         iterInfo.getLowerBounds()[d],
         builder.CreateMul(idx, iterInfo.getSteps()[d]), "omp.it.phys_iv");
