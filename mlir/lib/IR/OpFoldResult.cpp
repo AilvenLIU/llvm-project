@@ -149,3 +149,17 @@ OpFoldResults detail::convertSingleResultFold(Operation *op,
     return success();
   return result;
 }
+
+OpFoldResults detail::dropReplacementsOfReplacedResults(Operation *op,
+                                                        OpFoldResults result) {
+  bool namesReplacedResult =
+      llvm::any_of(result.getReplacements(), [&](OpFoldResult replacement) {
+        auto opResult = dyn_cast_if_present<OpResult>(
+            dyn_cast_if_present<Value>(replacement));
+        return opResult && opResult.getOwner() == op &&
+               result[opResult.getResultNumber()];
+      });
+  if (!namesReplacedResult)
+    return result;
+  return success(result.modifiedInPlace());
+}

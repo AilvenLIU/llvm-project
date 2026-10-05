@@ -62,10 +62,12 @@ namespace mlir {
 /// Allow printing to a stream.
 raw_ostream &operator<<(raw_ostream &os, OpFoldResult ofr);
 
-/// The result of a fold of any op. Replacement i is an Attribute (replace
-/// result i with a constant), a Value (replace result i with that value), or
-/// null / op->getResult(i) (keep result i). A separate bit records an in-place
-/// change of the op.
+/// The result of a fold of any op. An op with exactly one fixed result defines
+/// its folder with OpFoldResult; any other op can return OpFoldResults
+/// directly. Replacement i is an Attribute (replace result i with a
+/// constant), a Value (replace result i with that value), or null /
+/// op->getResult(i) (keep result i). A separate bit records an in-place change
+/// of the op.
 class [[nodiscard]] OpFoldResults {
 public:
   /// Failure: the fold did not apply and the IR is unchanged.
@@ -159,6 +161,15 @@ OpFoldResults convertLegacyFoldResults(LogicalResult status,
 /// Convert the result of a single-result fold of `op`: null is a failure, the
 /// op's own result means "in place", and anything else replaces the result.
 OpFoldResults convertSingleResultFold(Operation *op, OpFoldResult result);
+
+/// Return the normalized `result` without its replacements if a replacement
+/// names another result of `op` that `result` also replaces, because the
+/// outcome would depend on the order in which a driver replaces the results. A
+/// forwarding fold can return such a result where an op can use its own
+/// results: in a graph region or in an unreachable block. The in-place bit
+/// stays.
+OpFoldResults dropReplacementsOfReplacedResults(Operation *op,
+                                                OpFoldResults result);
 } // namespace detail
 } // namespace mlir
 
