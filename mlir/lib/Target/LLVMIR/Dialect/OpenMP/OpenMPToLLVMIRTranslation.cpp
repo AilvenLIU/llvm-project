@@ -3032,11 +3032,10 @@ static void fillAffinityLocators(Operation::operand_range affinityVars,
   }
 }
 
-static mlir::LogicalResult
-convertIteratorRegion(llvm::Value *linearIV, IteratorInfo &iterInfo,
-                      mlir::Block &iteratorRegionBlock,
-                      llvm::IRBuilderBase &builder,
-                      LLVM::ModuleTranslation &moduleTranslation) {
+static mlir::LogicalResult convertIteratorRegion(
+    llvm::Value *linearIV, IteratorInfo &iterInfo, mlir::Region &iteratorRegion,
+    llvm::IRBuilderBase &builder, LLVM::ModuleTranslation &moduleTranslation) {
+  mlir::Block &entryBlock = iteratorRegion.front();
   llvm::Value *tmp = linearIV;
   for (int d = (int)iterInfo.getDims() - 1; d >= 0; --d) {
     llvm::Value *trip = iterInfo.getTrips()[d];
@@ -3050,16 +3049,41 @@ convertIteratorRegion(llvm::Value *linearIV, IteratorInfo &iterInfo,
         iterInfo.getLowerBounds()[d],
         builder.CreateMul(idx, iterInfo.getSteps()[d]), "omp.it.phys_iv");
 
-    moduleTranslation.mapValue(iteratorRegionBlock.getArgument(d), physIV);
+    moduleTranslation.mapValue(entryBlock.getArgument(d), physIV);
   }
 
   // Translate the iterator region into the loop body.
-  moduleTranslation.mapBlock(&iteratorRegionBlock, builder.GetInsertBlock());
-  if (mlir::failed(moduleTranslation.convertBlock(iteratorRegionBlock,
-                                                  /*ignoreArguments=*/true,
-                                                  builder))) {
-    return mlir::failure();
+  if (iteratorRegion.hasOneBlock()) {
+    moduleTranslation.mapBlock(&entryBlock, builder.GetInsertBlock());
+    return moduleTranslation.convertBlock(entryBlock, /*ignoreArguments=*/true,
+                                          builder);
   }
+
+  // Unlike convertOmpOpRegions, do not forward the yielded value through a PHI:
+  // it may have no LLVM type (e.g. `!omp.affinity_entry_ty`). The unique
+  // `omp.yield` block is the continuation's only predecessor, so callers can
+  // look up the yielded value directly.
+  llvm::BasicBlock *continuation =
+      splitBB(builder, true, "omp.iterator.region.cont");
+  llvm::Instruction *sourceBranch = builder.GetInsertBlock()->getTerminator();
+  for (mlir::Block &block : iteratorRegion)
+    moduleTranslation.mapBlock(
+        &block,
+        llvm::BasicBlock::Create(builder.getContext(), "omp.iterator.region",
+                                 continuation->getParent(), continuation));
+  sourceBranch->setSuccessor(0, moduleTranslation.lookupBlock(&entryBlock));
+
+  for (mlir::Block *block : getBlocksSortedByDominance(iteratorRegion)) {
+    llvm::IRBuilderBase::InsertPointGuard guard(builder);
+    if (failed(moduleTranslation.convertBlock(*block, block->isEntryBlock(),
+                                              builder)))
+      return mlir::failure();
+    if (isa<omp::YieldOp>(block->getTerminator()))
+      builder.CreateBr(continuation);
+  }
+  LLVM::detail::connectPHINodes(iteratorRegion, moduleTranslation);
+
+  builder.SetInsertPoint(continuation);
   return mlir::success();
 }
 
@@ -3072,7 +3096,6 @@ fillIteratorLoop(mlir::omp::IteratorOp itersOp, llvm::IRBuilderBase &builder,
                  IteratorInfo &iterInfo, llvm::StringRef loopName,
                  IteratorStoreEntryTy genStoreEntry) {
   mlir::Region &itersRegion = itersOp.getRegion();
-  mlir::Block &iteratorRegionBlock = itersRegion.front();
 
   llvm::OpenMPIRBuilder::LocationDescription loc(builder);
 
@@ -3081,14 +3104,13 @@ fillIteratorLoop(mlir::omp::IteratorOp itersOp, llvm::IRBuilderBase &builder,
     llvm::IRBuilderBase::InsertPointGuard guard(builder);
     builder.restoreIP(bodyIP);
 
-    if (failed(convertIteratorRegion(linearIV, iterInfo, iteratorRegionBlock,
-                                     builder, moduleTranslation))) {
+    if (failed(convertIteratorRegion(linearIV, iterInfo, itersRegion, builder,
+                                     moduleTranslation))) {
       return llvm::make_error<llvm::StringError>(
           "failed to convert iterator region", llvm::inconvertibleErrorCode());
     }
 
-    auto yield =
-        mlir::dyn_cast<mlir::omp::YieldOp>(iteratorRegionBlock.getTerminator());
+    mlir::omp::YieldOp yield = itersOp.getYieldOp();
     assert(yield && yield.getResults().size() == 1 &&
            "expect omp.yield in iterator region to have one result");
 
